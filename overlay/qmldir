@@ -1,0 +1,16 @@
+singleton StateStore 1.0 StateStore.qml
+SnowmanCanvas 1.0 SnowmanCanvas.qml
+TreeCanvas 1.0 TreeCanvas.qml
+DecorCanvas 1.0 DecorCanvas.qml
+SnowmanItem 1.0 SnowmanItem.qml
+TreeItem 1.0 TreeItem.qml
+DecorItem 1.0 DecorItem.qml
+SnowDriftLayer 1.0 SnowDriftLayer.qml
+SnowfallLayer 1.0 SnowfallLayer.qml
+SnowballItem 1.0 SnowballItem.qml
+SnowplowItem 1.0 SnowplowItem.qml
+SantaItem 1.0 SantaItem.qml
+SnowmanCard 1.0 SnowmanCard.qml
+TreeCard 1.0 TreeCard.qml
+DecorCard 1.0 DecorCard.qml
+WinterDock 1.0 WinterDock.qml

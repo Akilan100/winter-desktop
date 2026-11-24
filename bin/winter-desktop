@@ -1,0 +1,403 @@
+#!/usr/bin/python3
+import glob
+import os
+import signal
+import subprocess
+import sys
+import time
+
+OVERLAY_QML = "/home/beast/hermes_workspace/winter-desktop/overlay/shell.qml"
+SNOWHUSH_BIN = "/home/beast/.local/bin/snowhush"
+STATE_DIR = os.path.expanduser("~/.local/state/winter-desktop")
+SNOWHUSH_SETTINGS = os.path.expanduser("~/.config/snowhush/settings")
+
+
+def build_env():
+    env = os.environ.copy()
+    uid = os.getuid()
+    runtime_dir = env.get("XDG_RUNTIME_DIR") or f"/run/user/{uid}"
+    env["XDG_RUNTIME_DIR"] = runtime_dir
+
+    if not env.get("WAYLAND_DISPLAY"):
+        sockets = sorted(glob.glob(os.path.join(runtime_dir, "wayland-*")))
+        sockets = [s for s in sockets if not s.endswith(".lock")]
+        env["WAYLAND_DISPLAY"] = os.path.basename(sockets[0]) if sockets else "wayland-1"
+
+    if not env.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        hypr_dirs = sorted(
+            glob.glob(os.path.join(runtime_dir, "hypr", "*")),
+            key=os.path.getmtime,
+            reverse=True,
+        )
+        if hypr_dirs:
+            env["HYPRLAND_INSTANCE_SIGNATURE"] = os.path.basename(hypr_dirs[0])
+
+    env.setdefault("DISPLAY", ":0")
+    return env
+
+
+def find_pids(pattern, exact=False):
+    if exact:
+        cmd = ["pgrep", "-x", pattern]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode != 0:
+            return []
+        pids = []
+        for line in res.stdout.strip().splitlines():
+            try:
+                pid = int(line.strip())
+                if pid != os.getpid():
+                    pids.append(pid)
+            except ValueError:
+                pass
+        return pids
+
+    # Match only actual Quickshell (`qs`) processes running OVERLAY_QML
+    res = subprocess.run(["pgrep", "-x", "qs"], capture_output=True, text=True)
+    if res.returncode != 0:
+        return []
+    pids = []
+    for line in res.stdout.strip().splitlines():
+        try:
+            pid = int(line.strip())
+            if pid == os.getpid():
+                continue
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                cmdline = f.read().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+            if pattern in cmdline:
+                pids.append(pid)
+        except (ValueError, OSError):
+            pass
+    return pids
+
+
+def is_running():
+    return bool(find_pids("snowhush", exact=True) or find_pids(OVERLAY_QML))
+
+
+def ensure_snowhush_quality():
+    os.makedirs(os.path.dirname(SNOWHUSH_SETTINGS), exist_ok=True)
+    kv = {}
+    order = []
+    if os.path.exists(SNOWHUSH_SETTINGS):
+        with open(SNOWHUSH_SETTINGS, "r", encoding="utf-8") as f:
+            for line in f.read().splitlines():
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    kv[k] = v.strip()
+                    if k not in order:
+                        order.append(k)
+    changed = False
+    desired = {
+        "performance": "1",
+        "snowOnWindows": "0",
+        "settleGround": "0",
+        "settlePanel": "0",
+        "intensity": "75",
+    }
+    for k, v in desired.items():
+        if kv.get(k) != v:
+            kv[k] = v
+            changed = True
+        if k not in order:
+            order.append(k)
+    if changed:
+        with open(SNOWHUSH_SETTINGS, "w", encoding="utf-8") as f:
+            for k in order:
+                f.write(f"{k}={kv[k]}\n")
+
+
+def start_snowhush(env):
+    if find_pids("snowhush", exact=True):
+        return
+    if not os.path.exists(SNOWHUSH_BIN):
+        return
+    ensure_snowhush_quality()
+    subprocess.Popen(
+        [SNOWHUSH_BIN],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def start_overlay(env):
+    if find_pids(OVERLAY_QML):
+        return
+    os.makedirs(STATE_DIR, exist_ok=True)
+    subprocess.run(
+        ["/usr/bin/qs", "-p", OVERLAY_QML, "-n", "-d"],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+
+
+def stop_snowhush():
+    pids = find_pids("snowhush", exact=True)
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    if pids:
+        deadline = time.time() + 2.0
+        while time.time() < deadline and find_pids("snowhush", exact=True):
+            time.sleep(0.05)
+        for pid in find_pids("snowhush", exact=True):
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+
+def stop_overlay(env):
+    if find_pids(OVERLAY_QML):
+        subprocess.run(
+            ["/usr/bin/qs", "-p", OVERLAY_QML, "kill"],
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        deadline = time.time() + 1.5
+        while time.time() < deadline and find_pids(OVERLAY_QML):
+            time.sleep(0.05)
+        for pid in find_pids(OVERLAY_QML):
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
+
+def cmd_on(env):
+    start_snowhush(env)
+    start_overlay(env)
+
+
+def cmd_off(env):
+    stop_overlay(env)
+    stop_snowhush()
+
+
+def cmd_toggle(env):
+    if is_running():
+        cmd_off(env)
+    else:
+        cmd_on(env)
+
+
+def find_snowhush_sni(env):
+    try:
+        out = subprocess.check_output(
+            [
+                "busctl", "--user", "-j", "get-property",
+                "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher",
+                "org.kde.StatusNotifierWatcher", "RegisteredStatusNotifierItems",
+            ],
+            env=env,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        import json
+        for item in json.loads(out).get("data", []):
+            svc = item.split("/")[0]
+            try:
+                id_out = subprocess.check_output(
+                    ["busctl", "--user", "-j", "get-property", svc, "/StatusNotifierItem", "org.kde.StatusNotifierItem", "Id"],
+                    env=env,
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                )
+                if "snowhush" in id_out:
+                    return svc
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return None
+
+
+def click_snowhush_menu(env, item_id):
+    svc = find_snowhush_sni(env)
+    if not svc:
+        return False
+    res = subprocess.run(
+        [
+            "busctl", "--user", "call", svc, "/MenuBar",
+            "com.canonical.dbusmenu", "Event", "isvu",
+            str(item_id), "clicked", "i", "0", "0",
+        ],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return res.returncode == 0
+
+
+def find_menu_id_by_label(env, svc, target_labels):
+    try:
+        import json
+        out = subprocess.check_output(
+            [
+                "busctl", "--user", "-j", "call", svc, "/MenuBar",
+                "com.canonical.dbusmenu", "GetLayout", "iias", "--", "0", "-1", "0",
+            ],
+            env=env,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        data = json.loads(out)
+        def walk(node):
+            if isinstance(node, list) and len(node) >= 3 and isinstance(node[0], int) and isinstance(node[1], dict):
+                lbl = node[1].get("label", {})
+                val = lbl.get("data", "") if isinstance(lbl, dict) else str(lbl)
+                if val in target_labels:
+                    return node[0]
+                for ch in node[2]:
+                    res = walk(ch.get("data") if isinstance(ch, dict) else ch)
+                    if res is not None:
+                        return res
+            elif isinstance(node, dict):
+                for v in node.values():
+                    res = walk(v)
+                    if res is not None:
+                        return res
+            elif isinstance(node, list):
+                for v in node:
+                    res = walk(v)
+                    if res is not None:
+                        return res
+            return None
+        return walk(data.get("data", []))
+    except Exception:
+        return None
+
+
+def click_snowhush_label(env, labels):
+    svc = find_snowhush_sni(env)
+    if not svc:
+        return False
+    item_id = find_menu_id_by_label(env, svc, labels)
+    if item_id is None:
+        return False
+    return click_snowhush_menu(env, item_id)
+
+
+def cmd_clear_snow(env):
+    if not click_snowhush_label(env, {"Clear Snow", "Clear Leaves", "Clear Blossoms", "Clear"}):
+        click_snowhush_menu(env, 26)
+
+
+def cmd_snow_intensity(env, val_str):
+    try:
+        val = int(val_str)
+    except ValueError:
+        sys.exit(1)
+    val = max(25, min(100, val))
+    if click_snowhush_label(env, {f"{val}%"}):
+        return
+    os.makedirs(os.path.dirname(SNOWHUSH_SETTINGS), exist_ok=True)
+    kv = {}
+    order = []
+    if os.path.exists(SNOWHUSH_SETTINGS):
+        with open(SNOWHUSH_SETTINGS, "r", encoding="utf-8") as f:
+            for line in f.read().splitlines():
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    kv[k] = v.strip()
+                    if k not in order:
+                        order.append(k)
+    kv["intensity"] = str(val)
+    if "intensity" not in order:
+        order.append("intensity")
+    with open(SNOWHUSH_SETTINGS, "w", encoding="utf-8") as f:
+        for k in order:
+            f.write(f"{k}={kv[k]}\n")
+
+
+def cmd_snow_mode(env, mode_str):
+    try:
+        mode = int(mode_str)
+    except ValueError:
+        sys.exit(1)
+    mode = max(0, min(3, mode))
+    menu_ids = {0: 20, 1: 21, 2: 22, 3: 23}
+    label_map = {
+        0: {"Snow"},
+        1: {"Autumn Leaves", "Autumn"},
+        2: {"Rain"},
+        3: {"Cherry Blossom", "Blossom"},
+    }
+    svc = find_snowhush_sni(env)
+    if svc:
+        item_id = find_menu_id_by_label(env, svc, label_map[mode])
+        if item_id is None:
+            item_id = menu_ids[mode]
+        click_snowhush_menu(env, item_id)
+        click_snowhush_menu(env, 5) # 75% intensity
+        return
+    os.makedirs(os.path.dirname(SNOWHUSH_SETTINGS), exist_ok=True)
+    lines = []
+    if os.path.exists(SNOWHUSH_SETTINGS):
+        with open(SNOWHUSH_SETTINGS, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    kv = {}
+    order = []
+    for line in lines:
+        if "=" in line:
+            k, v = line.split("=", 1)
+            k = k.strip()
+            kv[k] = v.strip()
+            if k not in order:
+                order.append(k)
+    kv["mode"] = str(mode)
+    kv["autumn"] = "1" if mode == 1 else "0"
+    for k in ("mode", "autumn"):
+        if k not in order:
+            order.append(k)
+    with open(SNOWHUSH_SETTINGS, "w", encoding="utf-8") as f:
+        for k in order:
+            f.write(f"{k}={kv[k]}\n")
+    stop_snowhush()
+    start_snowhush(env)
+
+
+def cmd_status():
+    sh = find_pids("snowhush", exact=True)
+    ov = find_pids(OVERLAY_QML)
+    print(f"snowhush: {'running ' + str(sh) if sh else 'stopped'}")
+    print(f"overlay:  {'running ' + str(ov) if ov else 'stopped'}")
+
+
+def main():
+    action = sys.argv[1] if len(sys.argv) > 1 else "toggle"
+    env = build_env()
+    if action == "toggle":
+        cmd_toggle(env)
+    elif action == "on":
+        cmd_on(env)
+    elif action == "off":
+        cmd_off(env)
+    elif action == "snow-mode" and len(sys.argv) > 2:
+        cmd_snow_mode(env, sys.argv[2])
+    elif action == "snow-intensity" and len(sys.argv) > 2:
+        cmd_snow_intensity(env, sys.argv[2])
+    elif action == "clear-snow":
+        cmd_clear_snow(env)
+    elif action == "status":
+        cmd_status()
+    else:
+        print("Usage: winter-desktop [toggle|on|off|status|clear-snow|snow-mode <0-3>]", file=sys.stderr)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

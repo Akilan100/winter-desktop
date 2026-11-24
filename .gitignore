@@ -1,0 +1,6 @@
+vendor/*.tar.gz
+vendor/extracted/
+*.log
+*.tmp
+__pycache__/
+.DS_Store
