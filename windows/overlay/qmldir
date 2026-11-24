@@ -1,0 +1,16 @@
+singleton StateStore 1.0 WindowsStateStore.qml
+SnowmanCanvas 1.0 ../../overlay/SnowmanCanvas.qml
+TreeCanvas 1.0 ../../overlay/TreeCanvas.qml
+DecorCanvas 1.0 ../../overlay/DecorCanvas.qml
+SnowmanItem 1.0 ../../overlay/SnowmanItem.qml
+TreeItem 1.0 ../../overlay/TreeItem.qml
+DecorItem 1.0 ../../overlay/DecorItem.qml
+SnowDriftLayer 1.0 ../../overlay/SnowDriftLayer.qml
+SnowfallLayer 1.0 ../../overlay/SnowfallLayer.qml
+SnowballItem 1.0 ../../overlay/SnowballItem.qml
+SnowplowItem 1.0 ../../overlay/SnowplowItem.qml
+SantaItem 1.0 ../../overlay/SantaItem.qml
+SnowmanCard 1.0 ../../overlay/SnowmanCard.qml
+TreeCard 1.0 ../../overlay/TreeCard.qml
+DecorCard 1.0 ../../overlay/DecorCard.qml
+WinterDock 1.0 ../../overlay/WinterDock.qml

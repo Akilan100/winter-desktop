@@ -1,0 +1,43 @@
+name: Build Windows 11 Executable
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PySide6 pyinstaller
+
+      - name: Build standalone executable
+        shell: pwsh
+        run: |
+          Set-Location windows
+          .\package.ps1
+
+      - name: Create release zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path windows/dist/WinterDesktop.exe -DestinationPath WinterDesktop-windows-x64.zip
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinterDesktop-windows-x64
+          path: WinterDesktop-windows-x64.zip
