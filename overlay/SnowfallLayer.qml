@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell
 
 Item {
     id: root
@@ -16,8 +15,8 @@ Item {
 
     visible: active
 
-    readonly property real effW: (screenW > 200) ? screenW : (root.width > 200 ? root.width : (Quickshell.screens.length > 0 ? Quickshell.screens[0].width : 1920))
-    readonly property real effH: (screenH > 200) ? screenH : (root.height > 200 ? root.height : (Quickshell.screens.length > 0 ? Quickshell.screens[0].height : 1080))
+    readonly property real effW: (screenW > 200) ? screenW : (root.width > 200 ? root.width : 1920)
+    readonly property real effH: (screenH > 200) ? screenH : (root.height > 200 ? root.height : 1080)
 
     readonly property int maxFlakes: 200
     readonly property int activeCount: Math.max(50, Math.min(maxFlakes, Math.round((intensity / 100.0) * maxFlakes)))

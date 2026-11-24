@@ -46,10 +46,19 @@ $wsh = New-Object -ComObject WScript.Shell
 $desktopPath = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::DesktopDirectory)
 $shortcutPath = Join-Path $desktopPath "Winter Desktop.lnk"
 
-$vbsLauncher = Join-Path $scriptDir "winter-desktop.vbs"
+# Direct target to pythonw.exe inside virtual environment for clean silent GUI launch
+$venvPythonW = Join-Path $venvDir "Scripts\pythonw.exe"
+if (-not (Test-Path $venvPythonW)) {
+    $venvPythonW = Join-Path (Split-Path -Parent $pythonCmd.Source) "pythonw.exe"
+}
+if (-not (Test-Path $venvPythonW)) {
+    $venvPythonW = $venvPython
+}
+
+$mainScript = Join-Path $scriptDir "winter_desktop.py"
 $shortcut = $wsh.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = "wscript.exe"
-$shortcut.Arguments = "`"$vbsLauncher`""
+$shortcut.TargetPath = $venvPythonW
+$shortcut.Arguments = "`"$mainScript`""
 $shortcut.WorkingDirectory = $scriptDir
 $shortcut.Description = "Winter Desktop - 144Hz Multi-Season Desktop Atmosphere"
 $shortcut.Save()

@@ -11,10 +11,10 @@ import threading
 from pathlib import Path
 
 try:
-    from PySide6.QtCore import Qt, QObject, Signal, Slot, QTimer, QUrl, QPoint
+    from PySide6.QtCore import Qt, QObject, Signal, Slot, QTimer, QUrl, QPoint, QAbstractNativeEventFilter
     from PySide6.QtGui import QGuiApplication, QColor, QIcon, QAction
     from PySide6.QtQml import QQmlApplicationEngine
-    from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
+    from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMessageBox
 except ImportError:
     print("Error: PySide6 is required. Install it using:")
     print("    pip install PySide6")
@@ -215,11 +215,33 @@ def setup_win32_window(hwnd: int):
     user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
 
 
+class GlobalHotkeyFilter(QAbstractNativeEventFilter):
+    def __init__(self, hotkey_id: int, callback):
+        super().__init__()
+        self.hotkey_id = hotkey_id
+        self.callback = callback
+
+    def nativeEventFilter(self, eventType, message):
+        if IS_WINDOWS and eventType == b"windows_generic_MSG":
+            if wintypes is not None:
+                msg = wintypes.MSG.from_address(int(message))
+                if msg.message == 0x0312:  # WM_HOTKEY
+                    if msg.wParam == self.hotkey_id:
+                        self.callback()
+                        return True, 0
+        return False, 0
+
+
 def setup_global_hotkey(hwnd: int) -> bool:
-    if not IS_WINDOWS or not hwnd:
+    if not IS_WINDOWS or not hwnd or user32 is None:
         return False
-    # Register Win + Alt + W
-    return bool(user32.RegisterHotKey(hwnd, HOTKEY_ID_TOGGLE, MOD_WIN | MOD_ALT, ord("W")))
+    # Register Win + Alt + W (MOD_WIN | MOD_ALT, 'W')
+    ok = bool(user32.RegisterHotKey(hwnd, HOTKEY_ID_TOGGLE, MOD_WIN | MOD_ALT, ord("W")))
+    if not ok:
+        # Fallback to Alt + Shift + W if Win key is restricted by policy
+        MOD_SHIFT = 0x0004
+        user32.RegisterHotKey(hwnd, HOTKEY_ID_TOGGLE, MOD_ALT | MOD_SHIFT, ord("W"))
+    return ok
 
 
 def main():
@@ -228,28 +250,51 @@ def main():
     app.setOrganizationName("KoiArt")
 
     state_dir = Path(os.environ.get("APPDATA", Path.home())) / "WinterDesktop"
+    state_dir.mkdir(parents=True, exist_ok=True)
     backend = Backend(state_dir)
 
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("backend", backend)
 
-    overlay_dir = Path(__file__).resolve().parent / "overlay"
+    if getattr(sys, "frozen", False):
+        base_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+        overlay_dir = base_dir / "windows" / "overlay" if (base_dir / "windows" / "overlay").exists() else base_dir / "overlay"
+    else:
+        overlay_dir = Path(__file__).resolve().parent / "overlay"
+
     engine.addImportPath(str(overlay_dir))
-    engine.addImportPath(str(overlay_dir.parent.parent / "overlay"))
 
     qml_file = overlay_dir / "windows_shell.qml"
     engine.load(QUrl.fromLocalFile(str(qml_file)))
 
     if not engine.rootObjects():
-        print("Failed to load QML overlay.", file=sys.stderr)
+        err_msg = f"Failed to load Winter Desktop QML overlay.\nPlease verify files in: {overlay_dir}"
+        log_file = state_dir / "winter_desktop_error.log"
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Failed to load QML overlay: {qml_file}\n")
+        print(err_msg, file=sys.stderr)
+        try:
+            QMessageBox.critical(None, "Winter Desktop Error", err_msg)
+        except Exception:
+            pass
         sys.exit(1)
 
     window = engine.rootObjects()[0]
     hwnd = int(window.winId()) if hasattr(window, "winId") else 0
 
+    def toggle_overlay():
+        if window.isVisible():
+            window.hide()
+        else:
+            window.show()
+            if IS_WINDOWS and hwnd:
+                setup_win32_window(hwnd)
+
     if IS_WINDOWS and hwnd:
         setup_win32_window(hwnd)
         setup_global_hotkey(hwnd)
+        hotkey_filter = GlobalHotkeyFilter(HOTKEY_ID_TOGGLE, toggle_overlay)
+        app.installNativeEventFilter(hotkey_filter)
 
     # Window tracking timer (16ms = ~60Hz window position polling for smooth window-top snow)
     tracker = WindowTracker()
