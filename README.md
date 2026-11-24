@@ -4,48 +4,63 @@ A native 144Hz VSync multi-season atmospheric desktop overlay for **Linux (Wayla
 
 ---
 
-## 🌟 Features
+## 🪟 How to Install on Windows 11 (Quick & Easy)
 
-- **True 144Hz VSync Smoothness**: Driven by QtQuick `FrameAnimation` locked to your monitor's display refresh rate (144Hz / 165Hz / 240Hz).
-- **4 Multi-Weather Seasonal Modes**:
-  - **❄ Snow (`Mode 0`)**: Realistic powder snowflakes, crystal stars (`❄`), and Catmull-Rom cubic Bézier snow dunes.
-  - **🍁 Autumn Leaves (`Mode 1`)**: Tumbling maple and oak leaves (`🍁`, `🍂`, `🍃`) in seasonal autumn hues with aerodynamic wind-sway.
-  - **🌧 Rain (`Mode 2`)**: High-velocity slanted rain streaks with aerodynamic tilt and surface sheen.
-  - **🌸 Cherry Blossom (`Mode 3`)**: Soft pink sakura petals (`🌸`) with gentle rotational drift.
-- **Interactive Snow Physics**:
-  - **Right-Click Snowball Rolling**: Right-click, hold, and drag across any accumulated snow patch to roll a snowball that grows up to 40px with realistic physical rotation.
-  - **Snowman Stacking & Dress-Up**: Stack 3 snowballs to build an interactive snowman with hats, carrot noses, scarves, sticks, and an accessory drawer.
-  - **Manual-Controlled Bulldozer**: Yellow snowplow with manual controls (Drive Left/Right, Pause, Honk, Blade Lift, Dismiss).
-  - **Ballistic Window Physics**: Dragging or throwing windows sheds airborne snow chunks that arc and land on neighboring windows or the ground.
-  - **Santa Sleigh**: Santa and reindeer flyby across the sky.
-- **Zero Autostart / Zero Background Footprint**: Completely terminates all overlay processes when toggled off. Never runs in the background or installs autostart services without your explicit trigger.
+Send your friend the GitHub link: **https://github.com/Akilan100/winter-desktop**
+
+They have two very easy ways to run it:
+
+### 🌟 Method 1: The Easiest Way (Double-Click Setup)
+1. On the GitHub page, click the green **Code** button and click **Download ZIP**.
+2. Right-click the downloaded zip file and choose **Extract All...**
+3. Open the extracted folder and double-click:
+   ```text
+   install.bat
+   ```
+4. It will automatically set up everything and create a **Winter Desktop** shortcut on their desktop!
+5. Double-click the desktop shortcut or `winter-desktop.bat` to run.
 
 ---
 
-## 🪟 Windows 11 Setup & Usage
-
-### Method 1: One-Click PowerShell Setup (Recommended)
-1. Clone or download the repository:
-   ```powershell
-   git clone https://github.com/Akilan100/winter-desktop.git
-   cd winter-desktop\windows
+### 🚀 Method 2: Prebuilt Standalone App (.exe - No Python Needed)
+1. Go to the **Releases** section:  
+   **https://github.com/Akilan100/winter-desktop/releases/latest**
+2. Download **`WinterDesktop-windows-x64.zip`**.
+3. Extract the zip and double-click:
+   ```text
+   WinterDesktop.exe
    ```
-2. Run the installer:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\install.ps1
-   ```
-3. A desktop shortcut **Winter Desktop** will be created. Double-click it or run `.\winter-desktop.bat`.
+   *(No setup, no commands, no installation needed!)*
 
-### Shortcut Key (Windows 11)
-- **`Win + Alt + W`**: Toggle the overlay on / off anytime.
-- **System Tray Icon**: Right-click the tray icon to switch weather modes, adjust intensity, or cleanly exit.
+---
 
-### Building Standalone Windows Executable (.exe)
-```powershell
-cd winter-desktop\windows
-powershell -ExecutionPolicy Bypass -File .\package.ps1
-# Output located at: dist\WinterDesktop.exe
-```
+### 🎮 Windows 11 Controls & Shortcuts
+
+| Action | How to do it |
+| :--- | :--- |
+| **Toggle On / Off** | Press **`Win + Alt + W`** anytime |
+| **Roll Snowball** | **Right-click, hold, and drag** along the bottom snow or window titlebars |
+| **Build Snowman** | Drag and stack 3 snowballs together |
+| **Yellow Bulldozer** | Click the bulldozer icon on the top dock to drive or clear snow |
+| **Switch Season** | Right-click the **System Tray icon** (near clock) $\rightarrow$ pick **Snow**, **Autumn Leaves**, **Rain**, or **Blossom** |
+| **Close Completely** | Right-click the **System Tray icon** $\rightarrow$ click **Exit** (leaves 0 background footprint) |
+
+---
+
+## 🌟 Features
+
+- **True 144Hz VSync Smoothness**: Driven by QtQuick `FrameAnimation` locked to display refresh rate.
+- **4 Seasonal Modes**:
+  - **❄ Snow (`Mode 0`)**: Realistic powder snowflakes, crystal stars (`❄`), and Catmull-Rom cubic Bézier snow dunes.
+  - **🍁 Autumn Leaves (`Mode 1`)**: Tumbling maple and oak leaves (`🍁`, `🍂`, `🍃`) in autumn hues with natural wind-sway.
+  - **🌧 Rain (`Mode 2`)**: Slanted raindrops with surface sheen and aerodynamic wind tilt.
+  - **🌸 Cherry Blossom (`Mode 3`)**: Soft pink sakura petals (`🌸`) with gentle rotational drift.
+- **Interactive Snow Physics**:
+  - **Snowball Rolling & Throwing**: Ball grows with realistic rotation; can be thrown across the screen.
+  - **Snowman Customization**: Hat, carrot nose, scarf, sunglasses, twig arms with dress-up drawer.
+  - **Bulldozer / Snowplow**: Manual controls (Drive Left/Right, Pause, Honk, Blade Lift, Dismiss).
+  - **Ballistic Window Physics**: Moving or throwing windows sheds airborne snow chunks to neighboring windows.
+- **Zero Autostart / Zero Background Footprint**: Completely terminates when toggled off.
 
 ---
 
@@ -71,10 +86,11 @@ winter-desktop clear-snow
 
 ---
 
-## ⚙️ Architecture
+## ⚙️ Repository Structure
 
 ```
 winter-desktop/
+├── install.bat              # 1-click double-click setup for Windows 11
 ├── overlay/                 # Cross-platform QtQuick 144Hz simulation components
 │   ├── SnowfallLayer.qml    # 144Hz weather particle simulation (Snow, Leaves, Rain, Blossom)
 │   ├── SnowDriftLayer.qml   # Catmull-Rom cubic Bézier snow dune waves
@@ -85,16 +101,17 @@ winter-desktop/
 │   ├── WinterDock.qml       # Top control dock
 │   └── shell.qml            # Wayland layer-shell window (Linux)
 ├── windows/                 # Windows 11 native integration
-│   ├── winter_desktop.py    # Windows 11 DWM transparent window, WinEvent window tracker & tray
-│   ├── install.ps1          # One-click Windows 11 installer & shortcut creator
+│   ├── winter_desktop.py    # Windows 11 DWM transparent window & tray
+│   ├── install.bat          # Double-click setup
+│   ├── install.ps1          # PowerShell setup script
 │   ├── winter-desktop.bat   # Windows batch launcher
-│   ├── winter-desktop.vbs   # Silent launcher
+│   ├── winter-desktop.vbs   # Silent background launcher
 │   ├── package.ps1          # Standalone PyInstaller build script
 │   └── overlay/
 │       ├── windows_shell.qml # Windows 11 top-level overlay window
 │       └── WindowsStateStore.qml # Windows state management & persistence
 └── .github/workflows/
-    └── windows-release.yml  # GitHub Actions CI for automated Windows 11 binary builds
+    └── windows-release.yml  # Automated Windows 11 binary build & release
 ```
 
 ---
